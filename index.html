@@ -42,7 +42,7 @@ select option{color:#000}label{font-size:12px;color:var(--m)}
 <div id="modal" onclick="if(event.target==this)closeM()"><div id="sheet" class="glass"></div></div>
 <div id="toast" class="glass"></div>
 <script>
-const API=''; // ← сюда URL веб-приложения Apps Script (…/exec). Пусто = локальный демо-режим
+const API='https://script.google.com/macros/s/AKfycbzFsGX4dtGeRd4CErcjb2SRthmCpytFS5HHY0RewJxxSVf_159MXmeX5yN2-0UY0LAl9A/exec'; // ← сюда URL веб-приложения Apps Script (…/exec). Пусто = локальный демо-режим
 const tg=window.Telegram&&Telegram.WebApp;if(tg){tg.ready();tg.expand()}
 const $=s=>document.querySelector(s),pad=n=>String(n).padStart(2,'0');
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
