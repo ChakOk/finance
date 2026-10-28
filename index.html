@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Финансы</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--t:#eef2ff;--m:#9aa6c7;--g:rgba(255,255,255,.09);--b:rgba(255,255,255,.18);--kr:#ff6b81;--cc:#ffa94d;--in:#b197fc;--bill:#4dabf7;--ok:#51cf66}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+body{font:15px/1.4 -apple-system,"Segoe UI",Roboto,sans-serif;color:var(--t);min-height:100vh;background:radial-gradient(circle at 15% 10%,#3b2a8c 0,transparent 45%),radial-gradient(circle at 90% 85%,#0e7490 0,transparent 45%),#0b1020;background-attachment:fixed;padding-bottom:40px}
+.glass{background:var(--g);border:1px solid var(--b);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-radius:18px}
+header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:12px 14px;margin:8px;border-radius:16px}
+header h1{font-size:17px;flex:1}
+button,input,select,textarea{font:inherit;color:var(--t)}
+.ib{background:var(--g);border:1px solid var(--b);border-radius:12px;width:38px;height:38px;cursor:pointer;font-size:18px}
+.btn{background:linear-gradient(135deg,#6d5dfc,#22b8cf);border:0;border-radius:12px;padding:11px 16px;cursor:pointer;font-weight:600}
+.btn.s{background:var(--g);border:1px solid var(--b)}
+#ov{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:.25s;z-index:8}
+#dr{position:fixed;top:0;bottom:0;left:0;width:250px;z-index:9;transform:translateX(-105%);transition:.28s;padding:20px 12px;border-radius:0 22px 22px 0;background:rgba(20,26,50,.6)}
+body.o #dr{transform:none}body.o #ov{opacity:1;pointer-events:auto}
+#dr a{display:block;padding:13px 14px;border-radius:12px;cursor:pointer;margin-bottom:4px}
+#dr a.on{background:var(--g);border:1px solid var(--b)}
+main{padding:0 8px}.card{padding:14px;margin-bottom:10px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}.mut{color:var(--m);font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.d{aspect-ratio:1;border-radius:12px;padding-top:6px;cursor:pointer;border:1px solid transparent}
+.d.t{border-color:var(--b)}.d.s{background:var(--g);border-color:var(--t)}
+.dots{display:flex;gap:3px;justify-content:center;margin-top:3px}.dots i{width:7px;height:7px;border-radius:50%}
+.k-kr{--c:var(--kr)}.k-cc{--c:var(--cc)}.k-in{--c:var(--in)}.k-bill{--c:var(--bill)}
+.ev{border-left:4px solid var(--c);padding-left:10px}
+input,select,textarea{width:100%;background:rgba(255,255,255,.08);border:1px solid var(--b);border-radius:10px;padding:10px;margin:4px 0 10px}
+select option{color:#000}label{font-size:12px;color:var(--m)}
+#modal{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.5);display:none;align-items:flex-end}
+#modal.on{display:flex}#sheet{width:100%;max-height:92vh;overflow:auto;padding:18px;border-radius:22px 22px 0 0;background:rgba(24,30,58,.85)}
+.chip{display:inline-block;padding:5px 10px;margin:0 6px 6px 0;border-radius:20px;background:var(--g);border:1px solid var(--b)}
+.bar{height:10px;border-radius:6px;background:var(--g);overflow:hidden;margin:8px 0}.bar b{display:block;height:100%;background:var(--ok)}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);padding:10px 16px;z-index:30;display:none}
+</style></head><body>
+<div id="ov" onclick="menu(0)"></div>
+<nav id="dr" class="glass"></nav>
+<header class="glass"><button class="ib" onclick="menu(1)">☰</button><h1 id="ttl"></h1><button class="ib" id="add" onclick="addNew()">＋</button></header>
+<main id="main"></main>
+<div id="modal" onclick="if(event.target==this)closeM()"><div id="sheet" class="glass"></div></div>
+<div id="toast" class="glass"></div>
+<script>
+const API=''; // ← сюда URL веб-приложения Apps Script (…/exec). Пусто = локальный демо-режим
+const tg=window.Telegram&&Telegram.WebApp;if(tg){tg.ready();tg.expand()}
+const $=s=>document.querySelector(s),pad=n=>String(n).padStart(2,'0');
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const iso=(y,m,d)=>y+'-'+pad(m+1)+'-'+pad(d),money=n=>Math.round(n).toLocaleString('ru-RU')+' ₽';
+const MN=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const TY={kredit:'Кредит',card:'Кредитка',inst:'Рассрочка'},KK={kredit:'kr',card:'cc',inst:'in'};
+const base=()=>({rev:0,income:0,cats:['Жильё','ЖКХ','Интернет','Продукты'],credits:[],bills:[]});
+let db=base(),view='cal',cur=new Date(),sel=null;
+const TABS={cal:'Календарь',cr:'Кредиты',bill:'Счета',bud:'Бюджет'};
+const norm=d=>Object.assign(base(),d||{});
+async function api(action,data){
+ if(!API){if(action=='save'){data.rev=(data.rev||0)+1;localStorage.fin=JSON.stringify(data);return{data}}return{data:JSON.parse(localStorage.fin||'null')||base()}}
+ try{const r=await fetch(API,{method:'POST',body:JSON.stringify({initData:tg?tg.initData:'',action,data,rev:db.rev})});return await r.json()}catch(e){return{error:'нет связи'}}
+}
+const toast=t=>{const e=$('#toast');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',2600)};
+async function load(){const r=await api('get');if(r.error)toast(r.error=='forbidden'?'Доступ только из Telegram':r.error);else db=norm(r.data);render()}
+async function save(){const r=await api('save',db);if(r.error){toast(r.error=='conflict'?'Данные обновились, повторите':r.error);if(r.data)db=norm(r.data)}else db=norm(r.data);render()}
+function menu(o){document.body.classList.toggle('o',!!o)}
+function go(v){view=v;menu(0);render()}
+function events(y,m){
+ const o=[],n=new Date(y,m+1,0).getDate(),pre=y+'-'+pad(m+1)+'-';
+ const add=(d,t,a,k,s)=>o.push({d,t,a:+a||0,k,s});
+ db.credits.forEach(c=>{const t=c.name||c.bank;
+  if(c.type=='kredit')add(pre+pad(Math.min(+c.day||1,n)),t,c.pay,'kr',c.bank+' · платёж по кредиту');
+  else if(c.type=='card'){if((c.graceEnd||'').startsWith(pre))add(c.graceEnd,t,c.debt,'cc',c.bank+' · конец беспроцентного периода')}
+  else(c.sched||[]).forEach(s=>s.d.startsWith(pre)&&add(s.d,t,s.a,'in',c.bank+' · рассрочка'))});
+ const D=864e5,first=Date.UTC(y,m,1),last=Date.UTC(y,m,n),mk=t=>{const x=new Date(t);return iso(x.getUTCFullYear(),x.getUTCMonth(),x.getUTCDate())};
+ db.bills.forEach(b=>{if(!b.date)return;const p=b.date.split('-'),s=Date.UTC(+p[0],p[1]-1,+p[2]),s2=b.cat+(b.name?' · '+b.name:'');
+  if(b.rep=='once'){if(b.date.startsWith(pre))add(b.date,b.name||b.cat,b.amount,'bill',b.cat)}
+  else if(b.rep=='month'){if(s<=last)add(pre+pad(Math.min(+p[2],n)),b.name||b.cat,b.amount,'bill',b.cat+' · ежемесячно')}
+  else{const st=(b.rep=='week'?7:Math.max(1,+b.every||1))*D;let t=s;if(t<first)t+=Math.ceil((first-t)/st)*st;for(;t<=last;t+=st)add(mk(t),b.name||b.cat,b.amount,'bill',b.cat+' · повтор')}});
+ return o.sort((a,b)=>a.d<b.d?-1:1)}
+function render(){
+ document.querySelectorAll('#dr a').forEach(a=>a.remove());
+ $('#dr').innerHTML=Object.keys(TABS).map(k=>`<a class="${k==view?'on':''}" onclick="go('${k}')">${TABS[k]}</a>`).join('');
+ $('#ttl').textContent=TABS[view];$('#add').style.display=view=='cr'||view=='bill'?'':'none';
+ $('#main').innerHTML=({cal:vCal,cr:vCr,bill:vBill,bud:vBud})[view]()}
+const nav=()=>`<div class="row card glass"><button class="ib" onclick="mv(-1)">‹</button><b>${MN[cur.getMonth()]} ${cur.getFullYear()}</b><button class="ib" onclick="mv(1)">›</button></div>`;
+function mv(d){cur=new Date(cur.getFullYear(),cur.getMonth()+d,1);sel=null;render()}
+const evHtml=e=>`<div class="ev card glass k-${e.k}" style="margin:8px 0 0"><div class="row"><b>${esc(e.t)}</b><b>${money(e.a)}</b></div><div class="mut">${esc(e.s)} · ${e.d.split('-').reverse().join('.')}</div></div>`;
+function vCal(){
+ const y=cur.getFullYear(),m=cur.getMonth(),n=new Date(y,m+1,0).getDate(),off=(new Date(y,m,1).getDay()+6)%7,ev=events(y,m),T=new Date(),ti=iso(T.getFullYear(),T.getMonth(),T.getDate());
+ let h=nav()+'<div class="card glass"><div class="grid mut">'+['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(x=>'<div>'+x+'</div>').join('')+'</div><div class="grid" style="margin-top:6px">'+'<div></div>'.repeat(off);
+ for(let d=1;d<=n;d++){const k=iso(y,m,d),ks=[...new Set(ev.filter(e=>e.d==k).map(e=>e.k))];
+  h+=`<div class="d ${k==ti?'t':''} ${k==sel?'s':''}" onclick="sel='${k}';render()">${d}<div class="dots">${ks.map(c=>`<i class="k-${c}" style="background:var(--c)"></i>`).join('')}</div></div>`}
+ h+='</div><div class="mut" style="margin-top:10px"><span style="color:var(--kr)">●</span> кредит <span style="color:var(--cc)">●</span> кредитка <span style="color:var(--in)">●</span> рассрочка <span style="color:var(--bill)">●</span> счета</div></div>';
+ if(sel){const l=ev.filter(e=>e.d==sel);h+=l.length?l.map(evHtml).join(''):'<div class="card glass mut">В этот день платежей нет</div>'}
+ return h}
+function vCr(){
+ return db.credits.length?db.credits.map(c=>{const sub=c.type=='kredit'?`Долг ${money(c.debt)} · платёж ${money(c.pay)} до ${c.day}-го · ${c.rate||0}%`:c.type=='card'?`Долг ${money(c.debt)} · ${c.rate||0}% · без процентов до ${(c.graceEnd||'').split('-').reverse().join('.')}`:`Платежей: ${(c.sched||[]).length}, всего ${money((c.sched||[]).reduce((s,x)=>s+x.a,0))}`;
+  return `<div class="card glass ev k-${KK[c.type]}"><div class="row"><b>${esc(c.name||TY[c.type])}</b><span class="mut">${TY[c.type]}</span></div><div>${esc(c.bank)}</div><div class="mut">${sub}</div><div class="row" style="margin-top:8px"><button class="btn s" onclick="credForm(${c.id})">Изменить</button><button class="btn s" onclick="del('credits',${c.id})">Удалить</button></div></div>`}).join(''):'<div class="card glass mut">Пока пусто. Нажмите ＋, чтобы добавить кредит, кредитку или рассрочку.</div>'}
+function vBill(){
+ let h='<div class="card glass"><label>Категории</label><div>'+db.cats.map((c,i)=>`<span class="chip">${esc(c)} <a onclick="delCat(${i})">✕</a></span>`).join('')+'</div><div class="row"><input id="nc" placeholder="Новая категория" style="margin:0"><button class="btn" onclick="addCat()">Добавить</button></div></div>';
+ return h+(db.bills.length?db.bills.map(b=>`<div class="card glass ev k-bill"><div class="row"><b>${esc(b.name||b.cat)}</b><b>${money(b.amount)}</b></div><div class="mut">${esc(b.cat)} · ${b.date.split('-').reverse().join('.')} · ${({once:'разово',month:'каждый месяц',week:'каждую неделю',days:'каждые '+b.every+' дн.'})[b.rep]}</div><div class="row" style="margin-top:8px"><button class="btn s" onclick="billForm(${b.id})">Изменить</button><button class="btn s" onclick="del('bills',${b.id})">Удалить</button></div></div>`).join(''):'<div class="card glass mut">Расходов нет. Нажмите ＋.</div>')}
+function vBud(){
+ const ev=events(cur.getFullYear(),cur.getMonth()),sum=k=>ev.filter(e=>k.includes(e.k)).reduce((s,e)=>s+e.a,0),cr=sum(['kr','cc','in']),bl=sum(['bill']),tot=cr+bl,left=db.income-tot,pc=db.income?Math.min(100,tot/db.income*100):(tot?100:0);
+ return nav()+`<div class="card glass"><label>Доход в месяц, ₽</label><input type="number" id="inc" value="${db.income||''}" inputmode="decimal"><button class="btn" onclick="db.income=+$('#inc').value||0;save()">Сохранить доход</button></div>
+ <div class="card glass"><div class="row"><span>Кредиты и рассрочки</span><b>${money(cr)}</b></div><div class="row"><span>Обычные счета</span><b>${money(bl)}</b></div><div class="row"><span>Нужно потратить за месяц</span><b>${money(tot)}</b></div><div class="bar"><b style="width:${pc}%;background:${left<0?'var(--kr)':'var(--ok)'}"></b></div>
+ <div class="row"><span>${left<0?'Не хватает':'Остаётся'}</span><b style="font-size:20px;color:${left<0?'var(--kr)':'var(--ok)'}">${money(Math.abs(left))}</b></div></div>`}
+function addNew(){view=='cr'?credForm():billForm()}
+const openM=h=>{$('#sheet').innerHTML=h;$('#modal').classList.add('on')},closeM=()=>$('#modal').classList.remove('on');
+const V=id=>$('#'+id).value,F=(id,l,v,t)=>`<label>${l}</label><input id="${id}" type="${t||'text'}" value="${esc(v)}" ${t=='number'?'step="any" inputmode="decimal"':''}>`;
+function credForm(id){
+ const c=db.credits.find(x=>x.id==id)||{type:'kredit',sched:[]};
+ openM(`<h3 style="margin-bottom:10px">${id?'Изменить':'Новый'} кредит</h3><label>Тип</label><select id="ty" onchange="tgl()">${Object.keys(TY).map(k=>`<option value="${k}" ${k==c.type?'selected':''}>${TY[k]}</option>`).join('')}</select>
+ ${F('bk','Банк',c.bank)}${F('nm','Название (необязательно)',c.name)}
+ <div data-f="kredit card inst">${F('rt','Годовой процент (для рассрочки необязательно)',c.rate,'number')}</div>
+ <div data-f="kredit card">${F('db','Сумма долга, ₽',c.debt,'number')}</div>
+ <div data-f="kredit">${F('pm','Сумма платежа, ₽',c.pay,'number')}${F('dy','День платежа в месяце (1–31)',c.day,'number')}</div>
+ <div data-f="card">${F('ge','Беспроцентный период до',c.graceEnd,'date')}</div>
+ <div data-f="inst"><label>График: по строке «дата;сумма» (дд.мм.гггг или гггг-мм-дд)</label><textarea id="sc" rows="5">${(c.sched||[]).map(s=>s.d+';'+s.a).join('\n')}</textarea><label>Или загрузить CSV/текст из банка</label><input type="file" id="fl" accept=".csv,.txt" onchange="rf(this)"></div>
+ <div class="row"><button class="btn s" onclick="closeM()">Отмена</button><button class="btn" onclick="saveCred(${id||0})">Сохранить</button></div>`);tgl()}
+function tgl(){document.querySelectorAll('[data-f]').forEach(e=>e.style.display=e.dataset.f.split(' ').includes(V('ty'))?'':'none')}
+function rf(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('#sc').value=parseSched(r.result).map(s=>s.d+';'+s.a).join('\n');toast('Загружено платежей: '+parseSched(r.result).length)};r.readAsText(f)}
+function parseSched(t){const o=[];t.split(/\r?\n/).forEach(l=>{const m=l.match(/(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})|(\d{4})-(\d{2})-(\d{2})/);if(!m)return;const d=m[4]?m[0]:m[3]+'-'+pad(m[2])+'-'+pad(m[1]),rest=l.slice(m.index+m[0].length),a=rest.match(/\d[\d\s]*(?:[.,]\d+)?/);if(a)o.push({d,a:parseFloat(a[0].replace(/\s/g,'').replace(',','.'))})});return o.sort((a,b)=>a.d<b.d?-1:1)}
+function saveCred(id){
+ const c={id:id||Date.now(),type:V('ty'),bank:V('bk').trim(),name:V('nm').trim(),rate:+V('rt')||0,debt:+V('db')||0,pay:+V('pm')||0,day:+V('dy')||1,graceEnd:V('ge'),sched:parseSched(V('sc'))};
+ if(!c.bank)return toast('Укажите банк');
+ if(c.type=='card'&&!c.graceEnd)return toast('Укажите дату окончания периода');
+ const i=db.credits.findIndex(x=>x.id==id);i<0?db.credits.push(c):db.credits[i]=c;closeM();save()}
+function billForm(id){
+ const b=db.bills.find(x=>x.id==id)||{rep:'once',every:2,date:new Date().toISOString().slice(0,10)};
+ openM(`<h3 style="margin-bottom:10px">${id?'Изменить':'Новый'} расход</h3><label>Категория</label><select id="ct">${db.cats.map(c=>`<option ${c==b.cat?'selected':''}>${esc(c)}</option>`).join('')}</select>
+ ${F('bn','Название (необязательно)',b.name)}${F('am','Сумма, ₽',b.amount,'number')}${F('dt','Дата расхода',b.date,'date')}
+ <label>Повторяемость</label><select id="rp" onchange="$('#evw').style.display=V('rp')=='days'?'':'none'">${[['once','Разово'],['month','Каждый месяц'],['week','Каждую неделю'],['days','Каждые N дней']].map(x=>`<option value="${x[0]}" ${x[0]==b.rep?'selected':''}>${x[1]}</option>`).join('')}</select>
+ <div id="evw" style="display:${b.rep=='days'?'':'none'}">${F('ev','Интервал, дней (напр. 10 — три раза в месяц)',b.every,'number')}</div>
+ <div class="row"><button class="btn s" onclick="closeM()">Отмена</button><button class="btn" onclick="saveBill(${id||0})">Сохранить</button></div>`)}
+function saveBill(id){
+ const b={id:id||Date.now(),cat:V('ct'),name:V('bn').trim(),amount:+V('am')||0,date:V('dt'),rep:V('rp'),every:Math.max(1,+V('ev')||1)};
+ if(!b.cat)return toast('Сначала добавьте категорию');if(!b.date||!b.amount)return toast('Укажите дату и сумму');
+ const i=db.bills.findIndex(x=>x.id==id);i<0?db.bills.push(b):db.bills[i]=b;closeM();save()}
+function del(k,id){if(confirm('Удалить?')){db[k]=db[k].filter(x=>x.id!=id);save()}}
+function addCat(){const v=V('nc').trim();if(v&&!db.cats.includes(v)){db.cats.push(v);save()}}
+function delCat(i){if(db.bills.some(b=>b.cat==db.cats[i]))return toast('Категория используется в расходах');db.cats.splice(i,1);save()}
+load();
+</script></body></html>
